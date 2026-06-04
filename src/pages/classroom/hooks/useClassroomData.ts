@@ -200,11 +200,16 @@ function isPastAssignment(assignment: PublicAssignment, now: number) {
 function getAssignmentProgress(
   assignmentId: string,
   attempts: PublicAttempt[],
+  activeStudentIds?: Set<string>,
 ) {
   const submittedStudentIds = new Set<string>();
 
   attempts.forEach((attempt) => {
     if (attempt.assignment_id !== assignmentId) {
+      return;
+    }
+
+    if (activeStudentIds && !activeStudentIds.has(attempt.student_user_id)) {
       return;
     }
 
@@ -347,6 +352,7 @@ export function useStudentClassroomData(
 
 export function useInstructorClassroomData(
   classroomId: string | null | undefined,
+  currentStudentIds?: string[],
 ): InstructorClassroomData {
   const [pageLoadedAt] = useState(() => Date.now());
   const validClassroomId = toUuidOrNull(classroomId);
@@ -361,14 +367,25 @@ export function useInstructorClassroomData(
   const pastAssignments = sortedAssignments.filter((assignment) =>
     isPastAssignment(assignment, pageLoadedAt),
   );
+  const activeStudentIds = currentStudentIds
+    ? new Set(currentStudentIds)
+    : undefined;
   const currentAssignmentCards = currentAssignments.map((assignment) => ({
     assignment,
-    completedCount: getAssignmentProgress(assignment.id, attempts.items)
+    completedCount: getAssignmentProgress(
+      assignment.id,
+      attempts.items,
+      activeStudentIds,
+    )
       .completedCount,
   }));
   const pastAssignmentCards = pastAssignments.map((assignment) => ({
     assignment,
-    completedCount: getAssignmentProgress(assignment.id, attempts.items)
+    completedCount: getAssignmentProgress(
+      assignment.id,
+      attempts.items,
+      activeStudentIds,
+    )
       .completedCount,
   }));
 
