@@ -1,4 +1,5 @@
 import type { VideoNode } from "../../nodeSchemas";
+import { extractYouTubeId } from "../../youtubeUtils";
 import {
   Handle,
   Position,
@@ -10,6 +11,7 @@ import { NodeCardFrame } from "./NodeCardFrame";
 
 export function VideoCard(props: NodeProps<ReactFlowCard<VideoNode>>) {
   const node = props.data.node;
+  const youtubeId = node.src ? extractYouTubeId(node.src) : null;
 
   return (
     <NodeCardFrame nodeId={node.id} nodeType={node.type} selected={Boolean(props.selected)}>
@@ -19,7 +21,13 @@ export function VideoCard(props: NodeProps<ReactFlowCard<VideoNode>>) {
         {node.src?.trim() || "No source URL configured."}
       </p>
 
-      {node.src ? (
+      {youtubeId ? (
+        <img
+          src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
+          alt="YouTube thumbnail"
+          className="creator-card-video-preview w-full object-cover"
+        />
+      ) : node.src ? (
         <video
           className="creator-card-video-preview"
           muted
@@ -43,8 +51,9 @@ export function VideoCard(props: NodeProps<ReactFlowCard<VideoNode>>) {
       )}
 
       <div className="creator-card-meta">
+        <span className="creator-card-tag">{youtubeId ? "YouTube" : "Hosted"}</span>
         <span className="creator-card-tag">{node.autoplay ? "Autoplay" : "Manual Play"}</span>
-        <span className="creator-card-tag">{node.captionsSrc ? "Captions" : "No Captions"}</span>
+        {!youtubeId && <span className="creator-card-tag">{node.captionsSrc ? "Captions" : "No Captions"}</span>}
       </div>
 
       <Handle type="source" position={Position.Right} className="creator-handle" />

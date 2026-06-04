@@ -30,6 +30,9 @@ export function VideoTab({ node }: NodeTabProps<VideoNode>) {
           className={panelInputClassName}
           placeholder="https://..."
         />
+        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+          Paste a YouTube link (youtube.com or youtu.be) or a direct video URL.
+        </p>
         <label className={`${labelClassName} mt-4`}>Captions URL</label>
         <TextInputDispatch
           node={node}
