@@ -1,5 +1,6 @@
 import { queryClient } from "../../lib/query-client-instance";
 import {
+  publicApiDelete,
   publicApiPost,
   publicApiPut,
   resolvePublicApiToken,
@@ -17,6 +18,15 @@ type JoinClassroomInput = {
 type UpdateClassroomInput = {
   classroomId: string;
   name: string;
+};
+
+type LeaveClassroomInput = {
+  classroomId: string;
+};
+
+type RemoveClassroomStudentInput = {
+  classroomId: string;
+  userId: string;
 };
 
 async function resolveRequiredToken() {
@@ -74,4 +84,26 @@ export async function updateClassroom(input: UpdateClassroomInput) {
 
   await invalidatePublicApiQueries();
   return response.item;
+}
+
+export async function leaveClassroom(input: LeaveClassroomInput) {
+  const token = await resolveRequiredToken();
+  await publicApiDelete<{ deleted: boolean }>(
+    `/api/public/classroom-members/${input.classroomId}/me`,
+    token,
+  );
+
+  await invalidatePublicApiQueries();
+}
+
+export async function removeClassroomStudent(
+  input: RemoveClassroomStudentInput,
+) {
+  const token = await resolveRequiredToken();
+  await publicApiDelete<{ deleted: boolean }>(
+    `/api/public/classroom-members/${input.classroomId}/users/${input.userId}`,
+    token,
+  );
+
+  await invalidatePublicApiQueries();
 }
