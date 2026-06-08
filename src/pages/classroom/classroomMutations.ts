@@ -29,6 +29,11 @@ type RemoveClassroomStudentInput = {
   userId: string;
 };
 
+export type PromoteClassroomStudentInput = {
+  classroomId: string;
+  userId: string;
+};
+
 async function resolveRequiredToken() {
   const token = await resolvePublicApiToken();
   if (!token) {
@@ -103,6 +108,20 @@ export async function removeClassroomStudent(
   await publicApiDelete<{ deleted: boolean }>(
     `/api/public/classroom-members/${input.classroomId}/users/${input.userId}`,
     token,
+  );
+
+  await invalidatePublicApiQueries();
+}
+
+export async function promoteClassroomStudent(
+  input: PromoteClassroomStudentInput,
+) {
+  const token = await resolveRequiredToken();
+
+  await publicApiPost<{ updated: boolean }>(
+    `/api/public/classroom-members/${input.classroomId}/users/${input.userId}/promote`,
+    token,
+    {},
   );
 
   await invalidatePublicApiQueries();

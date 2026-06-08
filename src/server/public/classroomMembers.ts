@@ -231,5 +231,85 @@ export function createPublicClassroomMembersRouter() {
     }
   });
 
+  router.post(
+  '/:classroomId/users/:userId/promote',
+  async (req, res) => {
+    const authedReq = asAuthedRequest(req);
+
+    const classroomId = parseUuidParam('classroomId', req.params.classroomId);
+    if (!classroomId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', classroomId.message);
+    }
+
+    const userId = parseUuidParam('userId', req.params.userId);
+    if (!userId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', userId.message);
+    }
+
+    try {
+      // only instructors can promote
+      const instructorClassroom = await prisma.classroom.findFirst({
+        where: {
+          AND: [
+            { id: classroomId.value },
+            instructorClassroomWhere(authedReq.auth.userId),
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!instructorClassroom) {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'You must be an instructor to promote students',
+        );
+      }
+
+      const targetMembership = await prisma.classroom_member.findUnique({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+      if (!targetMembership) {
+        return sendError(res, 404, 'NOT_FOUND', 'Classroom membership not found');
+      }
+
+      if (targetMembership.role !== 'student') {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'Only students can be promoted',
+        );
+      }
+
+      await prisma.classroom_member.update({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        data: {
+          role: 'instructor',
+        },
+      });
+
+      return res.json({ updated: true });
+    } catch (error) {
+      return sendInternalError(res, 'Failed to promote classroom member', error);
+    }
+  }
+);
+
   return router;
 }

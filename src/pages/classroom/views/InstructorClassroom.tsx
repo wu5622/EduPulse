@@ -7,7 +7,7 @@ import type {
 import { DataGuard } from "../../../components/data/DataGuard";
 import InstructorAssignmentCard from "../components/InstructorAssignmentCard";
 import AssignScenarioModal from "../components/AssignScenarioModal";
-import { removeClassroomStudent, updateClassroom } from "../classroomMutations";
+import { promoteClassroomStudent,removeClassroomStudent, updateClassroom } from "../classroomMutations";
 import { useInstructorClassroomData } from "../hooks/useClassroomData";
 
 type InstructorTab = "assignments" | "students";
@@ -37,6 +37,8 @@ function InstructorClassroom({
   const [renameSubmitting, setRenameSubmitting] = useState(false);
   const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
   const [removeStudentError, setRemoveStudentError] = useState<string | null>(null);
+  const [promotingStudentId, setPromotingStudentId] = useState<string | null>(null);
+  const [promoteStudentError, setPromoteStudentError] = useState<string | null>(null);
   const instructorMembers = classroomMembers.filter(
     (member) => member.role === "instructor",
   );
@@ -115,6 +117,33 @@ function InstructorClassroom({
       );
     } finally {
       setRemovingStudentId(null);
+    }
+  }
+
+  async function handlePromoteToInstructor(student: PublicClassroomMember) {
+    setPromoteStudentError(null);
+
+    const confirmed = window.confirm(
+      `Promote ${student.user_name} to instructor in "${classroom.name}"?\n\nThey will gain instructor permissions for this classroom.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPromotingStudentId(student.user_id);
+
+    try {
+      await promoteClassroomStudent({
+        classroomId: classroom.id,
+        userId: student.user_id,
+      });
+    } catch (error) {
+      setPromoteStudentError(
+        error instanceof Error ? error.message : "Failed to promote student.",
+      );
+    } finally {
+      setPromotingStudentId(null);
     }
   }
 
@@ -324,11 +353,21 @@ function InstructorClassroom({
               <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
                 Students
               </h3>
-              {removeStudentError ? (
-                <p className="mt-2 text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
-                  {removeStudentError}
-                </p>
-              ) : null}
+              {(removeStudentError || promoteStudentError) ? (
+              <div className="mt-2 space-y-1">
+                {removeStudentError ? (
+                  <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                    {removeStudentError}
+                  </p>
+                ) : null}
+
+                {promoteStudentError ? (
+                  <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                    {promoteStudentError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             </div>
             {studentMembers.length > 0 ? (
               <div className="overflow-x-auto">
@@ -359,6 +398,16 @@ function InstructorClassroom({
                           {formatJoinDate(student.created_at)}
                         </td>
                         <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handlePromoteToInstructor(student)}
+                            disabled={promotingStudentId === student.user_id}
+                            className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400 dark:border-blue-900/60 dark:bg-neutral-950 dark:text-blue-300 dark:hover:bg-blue-950/30 dark:disabled:border-neutral-800 dark:disabled:text-neutral-600"
+                          >
+                            {promotingStudentId === student.user_id
+                              ? "Promoting..."
+                              : "Promote"}
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleRemoveStudent(student)}
