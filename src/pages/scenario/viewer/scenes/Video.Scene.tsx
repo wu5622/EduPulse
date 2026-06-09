@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { VideoNode } from "../../nodeSchemas";
 import type { NodeSceneProps } from "../viewerTypes";
-import { SceneLayout } from "./sceneUi";
+import { SceneLayout, scenePrimaryButtonClassName } from "./sceneUi";
+import { ScenarioPlayer } from "../ScenarioPlayer.tsx";
 
 export function VideoScene({
   node,
@@ -10,8 +11,14 @@ export function VideoScene({
   errorMessage,
   dispatch,
 }: NodeSceneProps<VideoNode>) {
-  const playerRef = useRef<HTMLVideoElement>(null);
   const didAutoAdvanceRef = useRef<boolean>(false);
+  const [prevSrc, setPrevSrc] = useState(node.src);
+  const [hasEnded, setHasEnded] = useState(false);
+
+  if (prevSrc !== node.src) {
+    setPrevSrc(node.src);
+    setHasEnded(false);
+  }
 
   // TODO A video player without scrub forward?
   useEffect(() => {
@@ -19,20 +26,11 @@ export function VideoScene({
       didAutoAdvanceRef.current = true;
       void dispatch({ type: "ADVANCE" });
     }
-
-    const player = playerRef.current;
-    if (!player) {
-      return;
-    }
-
-    player.onended = () => {
-      void dispatch({ type: "ADVANCE" });
-    };
-
-    return () => {
-      player.onended = null;
-    };
   }, [node.id, node.src, busy, dispatch]);
+
+  // useEffect(() => {
+  //   setHasEnded(false);
+  // }, [node.src]);
 
   return (
     <SceneLayout
@@ -40,34 +38,31 @@ export function VideoScene({
       label="Video"
       title={node.title?.trim() || "Watch this clip"}
       errorMessage={errorMessage}
-    >
-      <div className="overflow-hidden rounded-[1.5rem] border border-neutral-200 bg-black shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:border-neutral-800">
-        {node.src ? (
-          <video
-            ref={playerRef}
-            className="aspect-video w-full bg-black"
-            controls
-            disablePictureInPicture
-            preload="auto"
-            autoPlay={Boolean(node.autoplay)}
+      footer={
+        node.src ? (
+          <button
+            type="button"
+            onClick={() => void dispatch({ type: "ADVANCE" })}
+            disabled={!hasEnded || busy}
+            className={scenePrimaryButtonClassName}
           >
-            <source src={node.src} />
-            {node.captionsSrc ? (
-              <track
-                src={node.captionsSrc}
-                kind="subtitles"
-                srcLang="en"
-                label="English"
-              />
-            ) : null}
-            Your browser does not support the video tag.
-          </video>
-        ) : (
-          <div className="flex aspect-video items-center justify-center px-6 text-center text-sm text-neutral-300">
-            Preparing the next scene...
-          </div>
-        )}
-      </div>
+            {busy ? "Continuing" : "Continue"}
+          </button>
+        ) : undefined
+      }
+    >
+      {node.src ? (
+        <ScenarioPlayer
+          src={node.src}
+          autoplay={node.autoplay}
+          captionsSrc={node.captionsSrc}
+          onEnded={() => setHasEnded(true)}
+        />
+      ) : (
+        <div className="flex aspect-video items-center justify-center rounded-[1.5rem] border border-neutral-200 bg-black px-6 text-center text-sm text-neutral-300 dark:border-neutral-800">
+          Preparing the next scene...
+        </div>
+      )}
     </SceneLayout>
   );
 }
