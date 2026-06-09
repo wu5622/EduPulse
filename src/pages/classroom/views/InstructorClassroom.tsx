@@ -340,6 +340,11 @@ function InstructorClassroom({
               <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
                 Instructors
               </h3>
+               {demoteInstructorError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {demoteInstructorError}
+                    </p>
+                  ) : null}
             </div>
             {instructorMembers.length > 0 ? (
               <div className="overflow-x-auto">
@@ -405,11 +410,7 @@ function InstructorClassroom({
               {(demoteInstructorError || removeStudentError || promoteStudentError) ? (
                 <div className="mt-2 space-y-1">
 
-                  {demoteInstructorError ? (
-                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
-                      {demoteInstructorError}
-                    </p>
-                  ) : null}
+                 
 
                   {removeStudentError ? (
                     <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
