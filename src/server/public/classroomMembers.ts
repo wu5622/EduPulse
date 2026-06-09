@@ -6,10 +6,11 @@ import {
   asAuthedRequest,
   parseOptionalUuidQuery,
   parsePagination,
+  parseUuidParam,
   sendError,
   sendInternalError,
 } from './common.js';
-import { accessibleClassroomWhere } from './scopes.js';
+import { accessibleClassroomWhere, instructorClassroomWhere } from './scopes.js';
 
 const classroomMemberSelect = {
   classroom_id: true,
@@ -101,6 +102,311 @@ export function createPublicClassroomMembersRouter() {
       return sendInternalError(res, 'Failed to list classroom members', error);
     }
   });
+
+  router.delete('/:classroomId/me', async (req, res) => {
+    const authedReq = asAuthedRequest(req);
+    const classroomId = parseUuidParam('classroomId', req.params.classroomId);
+    if (!classroomId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', classroomId.message);
+    }
+
+    try {
+      const membership = await prisma.classroom_member.findUnique({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: authedReq.auth.userId,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+      if (!membership) {
+        return sendError(res, 404, 'NOT_FOUND', 'Classroom membership not found');
+      }
+
+      if (membership.role !== 'student') {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'Only students can leave a classroom from this view',
+        );
+      }
+
+      await prisma.classroom_member.delete({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: authedReq.auth.userId,
+          },
+        },
+        select: {
+          classroom_id: true,
+        },
+      });
+
+      return res.json({ deleted: true });
+    } catch (error) {
+      return sendInternalError(res, 'Failed to leave classroom', error);
+    }
+  });
+
+  router.delete('/:classroomId/users/:userId', async (req, res) => {
+    const authedReq = asAuthedRequest(req);
+    const classroomId = parseUuidParam('classroomId', req.params.classroomId);
+    if (!classroomId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', classroomId.message);
+    }
+
+    const userId = parseUuidParam('userId', req.params.userId);
+    if (!userId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', userId.message);
+    }
+
+    try {
+      const instructorClassroom = await prisma.classroom.findFirst({
+        where: {
+          AND: [
+            { id: classroomId.value },
+            instructorClassroomWhere(authedReq.auth.userId),
+          ],
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!instructorClassroom) {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'You must be an instructor in this classroom to remove students',
+        );
+      }
+
+      const targetMembership = await prisma.classroom_member.findUnique({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+      if (!targetMembership) {
+        return sendError(res, 404, 'NOT_FOUND', 'Classroom membership not found');
+      }
+
+      if (targetMembership.role !== 'student') {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'Only student memberships can be removed',
+        );
+      }
+
+      await prisma.classroom_member.delete({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        select: {
+          classroom_id: true,
+        },
+      });
+
+      return res.json({ deleted: true });
+    } catch (error) {
+      return sendInternalError(res, 'Failed to remove classroom member', error);
+    }
+  });
+
+  router.post(
+  '/:classroomId/users/:userId/promote',
+  async (req, res) => {
+    const authedReq = asAuthedRequest(req);
+
+    const classroomId = parseUuidParam('classroomId', req.params.classroomId);
+    if (!classroomId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', classroomId.message);
+    }
+
+    const userId = parseUuidParam('userId', req.params.userId);
+    if (!userId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', userId.message);
+    }
+
+    try {
+      const instructorClassroom = await prisma.classroom.findFirst({
+        where: {
+          AND: [
+            { id: classroomId.value },
+            instructorClassroomWhere(authedReq.auth.userId),
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!instructorClassroom) {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'You must be an instructor to promote students',
+        );
+      }
+
+      const targetMembership = await prisma.classroom_member.findUnique({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+      if (!targetMembership) {
+        return sendError(res, 404, 'NOT_FOUND', 'Classroom membership not found');
+      }
+
+      if (targetMembership.role !== 'student') {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'Only students can be promoted',
+        );
+      }
+
+      await prisma.classroom_member.update({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        data: {
+          role: 'instructor',
+        },
+      });
+
+      return res.json({ updated: true });
+    } catch (error) {
+      return sendInternalError(res, 'Failed to promote classroom member', error);
+    }
+  }
+);
+
+router.post(
+  '/:classroomId/users/:userId/demote',
+  async (req, res) => {
+    const authedReq = asAuthedRequest(req);
+
+    const classroomId = parseUuidParam('classroomId', req.params.classroomId);
+    if (!classroomId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', classroomId.message);
+    }
+
+    const userId = parseUuidParam('userId', req.params.userId);
+    if (!userId.ok) {
+      return sendError(res, 400, 'BAD_REQUEST', userId.message);
+    }
+
+    try {
+      const instructorClassroom = await prisma.classroom.findFirst({
+        where: {
+          AND: [
+            { id: classroomId.value },
+            instructorClassroomWhere(authedReq.auth.userId),
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (!instructorClassroom) {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'You must be an instructor to demote instructors',
+        );
+      }
+
+      // Prevent demoting yourself
+      if (userId.value === authedReq.auth.userId) {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'You cannot remove your own instructor role',
+        );
+      }
+
+      const targetMembership = await prisma.classroom_member.findUnique({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        select: {
+          role: true,
+        },
+      });
+
+      if (!targetMembership) {
+        return sendError(
+          res,
+          404,
+          'NOT_FOUND',
+          'Classroom membership not found',
+        );
+      }
+
+      if (targetMembership.role !== 'instructor') {
+        return sendError(
+          res,
+          403,
+          'FORBIDDEN',
+          'Only instructors can be demoted',
+        );
+      }
+
+      await prisma.classroom_member.update({
+        where: {
+          classroom_id_user_id: {
+            classroom_id: classroomId.value,
+            user_id: userId.value,
+          },
+        },
+        data: {
+          role: 'student',
+        },
+      });
+
+      return res.json({ updated: true });
+    } catch (error) {
+      return sendInternalError(
+        res,
+        'Failed to demote classroom member',
+        error,
+      );
+    }
+  },
+);
 
   return router;
 }

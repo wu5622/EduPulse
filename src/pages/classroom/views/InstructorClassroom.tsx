@@ -7,13 +7,13 @@ import type {
 import { DataGuard } from "../../../components/data/DataGuard";
 import InstructorAssignmentCard from "../components/InstructorAssignmentCard";
 import AssignScenarioModal from "../components/AssignScenarioModal";
-import { updateClassroom } from "../classroomMutations";
+import { demoteClassroomInstructor, promoteClassroomStudent,removeClassroomStudent, updateClassroom } from "../classroomMutations";
 import { useInstructorClassroomData } from "../hooks/useClassroomData";
 
 type InstructorTab = "assignments" | "students";
 
 function formatJoinDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(navigator.language || undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -35,14 +35,30 @@ function InstructorClassroom({
   const [renameValue, setRenameValue] = useState(classroom.name);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renameSubmitting, setRenameSubmitting] = useState(false);
-  const data = useInstructorClassroomData(classroom.id);
+  const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
+  const [removeStudentError, setRemoveStudentError] = useState<string | null>(null);
+  const [promotingStudentId, setPromotingStudentId] = useState<string | null>(null);
+  const [promoteStudentError, setPromoteStudentError] = useState<string | null>(null);
+  const [demotingInstructorId, setDemotingInstructorId] = useState<string | null>(null);
+  const [demoteInstructorError, setDemoteInstructorError] = useState<string | null>(null);
+  const instructorMembers = classroomMembers.filter(
+    (member) => member.role === "instructor",
+  );
   const studentMembers = classroomMembers.filter(
     (member) => member.role === "student",
   );
+  const data = useInstructorClassroomData(
+    classroom.id,
+    studentMembers.map((member) => member.user_id),
+  );
+  const instructorSummary =
+    instructorMembers.length === 1
+      ? `${instructorMembers.length} instructor`
+      : `${instructorMembers.length} instructors`;
   const summaryText =
     data.assignmentsGuard.kind === "loading"
-      ? `${studentMembers.length} students | loading assignments`
-      : `${studentMembers.length} students | ${data.currentAssignments.length} active assignments`;
+      ? `${instructorSummary} | ${studentMembers.length} students | loading assignments`
+      : `${instructorSummary} | ${studentMembers.length} students | ${data.currentAssignments.length} active assignments`;
 
   useEffect(() => {
     setRenameValue(classroom.name);
@@ -80,6 +96,87 @@ function InstructorClassroom({
     }
   }
 
+  async function handleRemoveStudent(student: PublicClassroomMember) {
+    setRemoveStudentError(null);
+
+    const confirmed = window.confirm(
+      `Remove ${student.user_name} from "${classroom.name}"?\n\nThey will lose access to this classroom until they join again with a code.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setRemovingStudentId(student.user_id);
+
+    try {
+      await removeClassroomStudent({
+        classroomId: classroom.id,
+        userId: student.user_id,
+      });
+    } catch (error) {
+      setRemoveStudentError(
+        error instanceof Error ? error.message : "Failed to remove student.",
+      );
+    } finally {
+      setRemovingStudentId(null);
+    }
+  }
+
+  async function handlePromoteToInstructor(student: PublicClassroomMember) {
+    setPromoteStudentError(null);
+
+    const confirmed = window.confirm(
+      `Promote ${student.user_name} to instructor in "${classroom.name}"?\n\nThey will gain instructor permissions for this classroom.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPromotingStudentId(student.user_id);
+
+    try {
+      await promoteClassroomStudent({
+        classroomId: classroom.id,
+        userId: student.user_id,
+      });
+    } catch (error) {
+      setPromoteStudentError(
+        error instanceof Error ? error.message : "Failed to promote student.",
+      );
+    } finally {
+      setPromotingStudentId(null);
+    }
+  }
+
+  async function handleDemoteInstructor(instructor: PublicClassroomMember) {
+  setDemoteInstructorError(null);
+
+  const confirmed = window.confirm(
+    `Remove instructor privileges from ${instructor.user_name}?\n\nThey will remain in the classroom as a student.`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setDemotingInstructorId(instructor.user_id);
+
+  try {
+    await demoteClassroomInstructor({
+      classroomId: classroom.id,
+      userId: instructor.user_id,
+    });
+  } catch (error) {
+    setDemoteInstructorError(
+      error instanceof Error
+        ? error.message
+        : "Failed to remove instructor privileges.",
+    );
+  } finally {
+    setDemotingInstructorId(null);
+  }
+}
   return (
     <>
       <section className="rounded-2xl border border-neutral-300 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-950/40">
@@ -91,6 +188,11 @@ function InstructorClassroom({
               </p>
               <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
                 Join code: {classroom.code ?? "N/A"}
+              </p>
+              <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
+                Instructors:{" "}
+                {instructorMembers.map((member) => member.user_name).join(", ") ||
+                  "None"}
               </p>
               <p className="mt-2 text-lg text-neutral-700 dark:text-neutral-300">
                 {summaryText}
@@ -171,8 +273,8 @@ function InstructorClassroom({
               type="button"
               onClick={() => setActiveTab("assignments")}
               className={`border-b-2 pb-3 text-sm font-semibold transition ${activeTab === "assignments"
-                  ? "border-cyan-500 text-cyan-700 dark:text-cyan-300"
-                  : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                ? "border-cyan-500 text-cyan-700 dark:text-cyan-300"
+                : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
                 }`}
             >
               Assignments
@@ -181,8 +283,8 @@ function InstructorClassroom({
               type="button"
               onClick={() => setActiveTab("students")}
               className={`border-b-2 pb-3 text-sm font-semibold transition ${activeTab === "students"
-                  ? "border-cyan-500 text-cyan-700 dark:text-cyan-300"
-                  : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                ? "border-cyan-500 text-cyan-700 dark:text-cyan-300"
+                : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
                 }`}
             >
               Students
@@ -232,39 +334,159 @@ function InstructorClassroom({
       ) : null}
 
       {activeTab === "students" ? (
-        <section className="mt-6 rounded-2xl border border-neutral-300 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950/40">
-          {studentMembers.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-800">
-                <thead className="bg-neutral-50 dark:bg-neutral-900/60">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
-                      Student
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
-                      Joined
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                  {studentMembers.map((student) => (
-                    <tr key={student.user_id}>
-                      <td className="px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                        {student.user_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
-                        {formatJoinDate(student.created_at)}
-                      </td>
+        <section className="mt-6 space-y-6">
+          <div className="rounded-2xl border border-neutral-300 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950/40">
+            <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                Instructors
+              </h3>
+            </div>
+            {instructorMembers.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-800">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/60">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Instructor
+                      </th>
+
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Joined
+                      </th>
+
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Actions
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {instructorMembers.map((instructor) => (
+                      <tr key={instructor.user_id}>
+                        <td className="px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          <div>{instructor.user_name}</div>
+                          <div className="mt-1 text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                            {instructor.user_email}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
+                          {formatJoinDate(instructor.created_at)}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDemoteInstructor(instructor)}
+                            disabled={demotingInstructorId === instructor.user_id}
+                            className="rounded-full border border-amber-200 bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400 dark:border-amber-900/60 dark:bg-neutral-950 dark:text-amber-300 dark:hover:bg-amber-950/30 dark:disabled:border-neutral-800 dark:disabled:text-neutral-600"
+                          >
+                            {demotingInstructorId === instructor.user_id
+                              ? "Removing..."
+                              : "Remove Instructor"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-sm text-neutral-600 dark:text-neutral-300">
+                No instructors found for this classroom.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-neutral-300 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950/40">
+            <div className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                Students
+              </h3>
+              {(demoteInstructorError || removeStudentError || promoteStudentError) ? (
+                <div className="mt-2 space-y-1">
+
+                  {demoteInstructorError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {demoteInstructorError}
+                    </p>
+                  ) : null}
+
+                  {removeStudentError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {removeStudentError}
+                    </p>
+                  ) : null}
+
+                  {promoteStudentError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {promoteStudentError}
+                    </p>
+                  ) : null}
+
+                </div>
+              ) : null}
             </div>
-          ) : (
-            <div className="px-4 py-6 text-sm text-neutral-600 dark:text-neutral-300">
-              No students have joined this classroom yet.
-            </div>
-          )}
+            {studentMembers.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-neutral-200 dark:divide-neutral-800">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/60">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Student
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Joined
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {studentMembers.map((student) => (
+                      <tr key={student.user_id}>
+                        <td className="px-4 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          <div>{student.user_name}</div>
+                          <div className="mt-1 text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                            {student.user_email}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
+                          {formatJoinDate(student.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handlePromoteToInstructor(student)}
+                            disabled={promotingStudentId === student.user_id}
+                            className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400 dark:border-blue-900/60 dark:bg-neutral-950 dark:text-blue-300 dark:hover:bg-blue-950/30 dark:disabled:border-neutral-800 dark:disabled:text-neutral-600"
+                          >
+                            {promotingStudentId === student.user_id
+                              ? "Promoting..."
+                              : "Promote"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveStudent(student)}
+                            disabled={removingStudentId === student.user_id}
+                            className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400 dark:border-rose-900/60 dark:bg-neutral-950 dark:text-rose-300 dark:hover:bg-rose-950/30 dark:disabled:border-neutral-800 dark:disabled:text-neutral-600"
+                          >
+                            {removingStudentId === student.user_id
+                              ? "Removing..."
+                              : "Remove"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-sm text-neutral-600 dark:text-neutral-300">
+                No students have joined this classroom yet.
+              </div>
+            )}
+          </div>
         </section>
       ) : null}
 
