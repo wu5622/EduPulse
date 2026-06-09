@@ -1,5 +1,6 @@
 import type { VideoNode } from "../../nodeSchemas";
-import { extractYouTubeId } from "../../youtubeUtils";
+import ReactPlayer from "react-player"
+// import { extractYouTubeId } from "../../youtubeUtils";
 import {
   Handle,
   Position,
@@ -11,7 +12,7 @@ import { NodeCardFrame } from "./NodeCardFrame";
 
 export function VideoCard(props: NodeProps<ReactFlowCard<VideoNode>>) {
   const node = props.data.node;
-  const youtubeId = node.src ? extractYouTubeId(node.src) : null;
+  // const youtubeId = node.src ? extractYouTubeId(node.src) : null;
 
   return (
     <NodeCardFrame nodeId={node.id} nodeType={node.type} selected={Boolean(props.selected)}>
@@ -21,39 +22,35 @@ export function VideoCard(props: NodeProps<ReactFlowCard<VideoNode>>) {
         {node.src?.trim() || "No source URL configured."}
       </p>
 
-      {youtubeId ? (
-        <img
-          src={`https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`}
-          alt="YouTube thumbnail"
-          className="creator-card-video-preview w-full object-cover"
-        />
-      ) : node.src ? (
-        <video
-          className="creator-card-video-preview"
-          muted
-          playsInline
-          controls
-          preload="metadata"
+      {node.src ? (
+        <div
+        className="creator-card-video-preview"
+        style={{ position: "relative", aspectRatio: "16/9", height: "auto", overflow: "hidden"}}
         >
-          <source src={node.src} />
-          {node.captionsSrc && (
-            <track
-              src={node.captionsSrc}
-              kind="subtitles"
-              srcLang="en"
-              label="English"
-            />
-          )}
-          Your browser does not support the video tag.
-        </video>
+        <ReactPlayer
+          src={node.src}
+          controls={true}
+          muted={true}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", maxWidth: "100%", maxHeight: "100%"}}
+        >
+        {node.captionsSrc ? (
+          <track
+          src={node.captionsSrc}
+          kind="subtitles"
+          srcLang="en"
+          label="English"
+          />
+        ): null}
+        </ReactPlayer>
+        </div>
       ) : (
         <div className="creator-card-video-empty">No preview</div>
       )}
 
       <div className="creator-card-meta">
-        <span className="creator-card-tag">{youtubeId ? "YouTube" : "Hosted"}</span>
+        <span className="creator-card-tag">{"Hosted"}</span>
         <span className="creator-card-tag">{node.autoplay ? "Autoplay" : "Manual Play"}</span>
-        {!youtubeId && <span className="creator-card-tag">{node.captionsSrc ? "Captions" : "No Captions"}</span>}
+        <span className="creator-card-tag">{node.captionsSrc ? "Captions" : "No Captions"}</span>
       </div>
 
       <Handle type="source" position={Position.Right} className="creator-handle" />
