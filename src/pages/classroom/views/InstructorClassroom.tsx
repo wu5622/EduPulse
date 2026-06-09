@@ -7,7 +7,7 @@ import type {
 import { DataGuard } from "../../../components/data/DataGuard";
 import InstructorAssignmentCard from "../components/InstructorAssignmentCard";
 import AssignScenarioModal from "../components/AssignScenarioModal";
-import { promoteClassroomStudent,removeClassroomStudent, updateClassroom } from "../classroomMutations";
+import { demoteClassroomInstructor, promoteClassroomStudent,removeClassroomStudent, updateClassroom } from "../classroomMutations";
 import { useInstructorClassroomData } from "../hooks/useClassroomData";
 
 type InstructorTab = "assignments" | "students";
@@ -39,6 +39,8 @@ function InstructorClassroom({
   const [removeStudentError, setRemoveStudentError] = useState<string | null>(null);
   const [promotingStudentId, setPromotingStudentId] = useState<string | null>(null);
   const [promoteStudentError, setPromoteStudentError] = useState<string | null>(null);
+  const [demotingInstructorId, setDemotingInstructorId] = useState<string | null>(null);
+  const [demoteInstructorError, setDemoteInstructorError] = useState<string | null>(null);
   const instructorMembers = classroomMembers.filter(
     (member) => member.role === "instructor",
   );
@@ -147,6 +149,34 @@ function InstructorClassroom({
     }
   }
 
+  async function handleDemoteInstructor(instructor: PublicClassroomMember) {
+  setDemoteInstructorError(null);
+
+  const confirmed = window.confirm(
+    `Remove instructor privileges from ${instructor.user_name}?\n\nThey will remain in the classroom as a student.`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setDemotingInstructorId(instructor.user_id);
+
+  try {
+    await demoteClassroomInstructor({
+      classroomId: classroom.id,
+      userId: instructor.user_id,
+    });
+  } catch (error) {
+    setDemoteInstructorError(
+      error instanceof Error
+        ? error.message
+        : "Failed to remove instructor privileges.",
+    );
+  } finally {
+    setDemotingInstructorId(null);
+  }
+}
   return (
     <>
       <section className="rounded-2xl border border-neutral-300 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-950/40">
@@ -319,8 +349,13 @@ function InstructorClassroom({
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
                         Instructor
                       </th>
+
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
                         Joined
+                      </th>
+
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
+                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -333,8 +368,22 @@ function InstructorClassroom({
                             {instructor.user_email}
                           </div>
                         </td>
+
                         <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-300">
                           {formatJoinDate(instructor.created_at)}
+                        </td>
+
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDemoteInstructor(instructor)}
+                            disabled={demotingInstructorId === instructor.user_id}
+                            className="rounded-full border border-amber-200 bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 transition hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-400 dark:border-amber-900/60 dark:bg-neutral-950 dark:text-amber-300 dark:hover:bg-amber-950/30 dark:disabled:border-neutral-800 dark:disabled:text-neutral-600"
+                          >
+                            {demotingInstructorId === instructor.user_id
+                              ? "Removing..."
+                              : "Remove Instructor"}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -353,21 +402,29 @@ function InstructorClassroom({
               <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400">
                 Students
               </h3>
-              {(removeStudentError || promoteStudentError) ? (
-              <div className="mt-2 space-y-1">
-                {removeStudentError ? (
-                  <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
-                    {removeStudentError}
-                  </p>
-                ) : null}
+              {(demoteInstructorError || removeStudentError || promoteStudentError) ? (
+                <div className="mt-2 space-y-1">
 
-                {promoteStudentError ? (
-                  <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
-                    {promoteStudentError}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
+                  {demoteInstructorError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {demoteInstructorError}
+                    </p>
+                  ) : null}
+
+                  {removeStudentError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {removeStudentError}
+                    </p>
+                  ) : null}
+
+                  {promoteStudentError ? (
+                    <p className="text-sm normal-case tracking-normal text-rose-600 dark:text-rose-300">
+                      {promoteStudentError}
+                    </p>
+                  ) : null}
+
+                </div>
+              ) : null}
             </div>
             {studentMembers.length > 0 ? (
               <div className="overflow-x-auto">

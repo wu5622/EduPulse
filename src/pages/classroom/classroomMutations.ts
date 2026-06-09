@@ -29,7 +29,12 @@ type RemoveClassroomStudentInput = {
   userId: string;
 };
 
-export type PromoteClassroomStudentInput = {
+type PromoteClassroomStudentInput = {
+  classroomId: string;
+  userId: string;
+};
+
+type DemoteClassroomInstructorInput = {
   classroomId: string;
   userId: string;
 };
@@ -120,6 +125,20 @@ export async function promoteClassroomStudent(
 
   await publicApiPost<{ updated: boolean }>(
     `/api/public/classroom-members/${input.classroomId}/users/${input.userId}/promote`,
+    token,
+    {},
+  );
+
+  await invalidatePublicApiQueries();
+}
+
+export async function demoteClassroomInstructor(
+  input: DemoteClassroomInstructorInput,
+) {
+  const token = await resolveRequiredToken();
+
+  await publicApiPost<{ updated: boolean }>(
+    `/api/public/classroom-members/${input.classroomId}/users/${input.userId}/demote`,
     token,
     {},
   );
